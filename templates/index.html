@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartCampus | College Navigation & Shortest Route Planner</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <!-- Top Navigation Header -->
+    <header class="app-header">
+        <div class="header-container">
+            <div class="brand">
+                <div class="brand-icon">
+                    <i class="fa-solid fa-compass-drafting"></i>
+                </div>
+                <div class="brand-text">
+                    <h1>SmartCampus <span class="badge-tag">Route Planner</span></h1>
+                    <p class="tagline">Interactive College Map & Shortest Walking Path Finder</p>
+                </div>
+            </div>
+
+            <nav class="nav-tabs" id="mainNav">
+                <button class="nav-tab active" data-tab="tab-navigation">
+                    <i class="fa-solid fa-map-location-dot"></i>
+                    <span>Campus Navigation</span>
+                </button>
+                <button class="nav-tab" data-tab="tab-visualizer">
+                    <i class="fa-solid fa-network-wired"></i>
+                    <span>Algorithm Visualizer</span>
+                </button>
+                <button class="nav-tab" data-tab="tab-benchmark">
+                    <i class="fa-solid fa-chart-line"></i>
+                    <span>Performance Analytics</span>
+                </button>
+            </nav>
+
+            <div class="header-status">
+                <span class="status-indicator online"></span>
+                <span class="status-label">{{ summary.num_nodes }} Landmarks • {{ summary.num_edges }} Walkways</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Application Container -->
+    <main class="app-main">
+        <!-- ================= TAB 1: CAMPUS NAVIGATION ================= -->
+        <section id="tab-navigation" class="tab-pane active">
+            <div class="layout-grid">
+                <!-- Sidebar Controls & Route Summary -->
+                <aside class="sidebar-panel">
+                    <!-- Location Selector Card -->
+                    <div class="card glass-card">
+                        <div class="card-header">
+                            <h2><i class="fa-solid fa-route"></i> Plan Campus Route</h2>
+                            <span class="pill-badge pill-green">Shortest Route</span>
+                        </div>
+                        <div class="card-body">
+                            <!-- Preset Quick Buttons -->
+                            <div class="preset-section">
+                                <label class="field-label"><i class="fa-solid fa-bolt"></i> Popular Routes:</label>
+                                <div class="preset-chips">
+                                    <button type="button" class="preset-btn" data-start="GATE" data-end="LIB">Gate → Library</button>
+                                    <button type="button" class="preset-btn" data-start="HOSTEL_B" data-end="CSE">Hostel → CSE</button>
+                                    <button type="button" class="preset-btn" data-start="ADMIN" data-end="SPORTS">Admin → Sports</button>
+                                    <button type="button" class="preset-btn" data-start="AUDI" data-end="CANTEEN">Audi → Canteen</button>
+                                </div>
+                            </div>
+
+                            <form id="routeForm" class="route-form">
+                                <!-- Origin Dropdown -->
+                                <div class="form-group">
+                                    <label for="startNode" class="field-label">
+                                        <i class="fa-solid fa-circle-dot color-start"></i> Starting Point:
+                                    </label>
+                                    <div class="select-wrapper">
+                                        <select id="startNode" name="start" required>
+                                            <option value="" disabled selected>Select start location...</option>
+                                            {% for node_id, node in nodes.items() %}
+                                                <option value="{{ node_id }}">{{ node.name }} ({{ node.category }})</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <!-- Swap Button -->
+                                <div class="swap-action">
+                                    <button type="button" id="swapLocationsBtn" class="btn-icon" title="Swap Start & Destination">
+                                        <i class="fa-solid fa-arrows-up-down"></i>
+                                    </button>
+                                </div>
+
+                                <!-- Destination Dropdown -->
+                                <div class="form-group">
+                                    <label for="endNode" class="field-label">
+                                        <i class="fa-solid fa-location-dot color-end"></i> Destination:
+                                    </label>
+                                    <div class="select-wrapper">
+                                        <select id="endNode" name="end" required>
+                                            <option value="" disabled selected>Select destination...</option>
+                                            {% for node_id, node in nodes.items() %}
+                                                <option value="{{ node_id }}">{{ node.name }} ({{ node.category }})</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <!-- Route Options -->
+                                <div class="form-options">
+                                    <label class="checkbox-label" title="Only consider wheelchair-accessible paved pathways">
+                                        <input type="checkbox" id="accessibleOnly" name="accessible_only">
+                                        <span class="custom-checkbox"></span>
+                                        <span class="checkbox-text"><i class="fa-solid fa-wheelchair"></i> Wheelchair / Accessible Walkways Only</span>
+                                    </label>
+                                </div>
+
+                                <!-- Action Buttons -->
+                                <div class="form-actions">
+                                    <button type="submit" id="findRouteBtn" class="btn btn-primary">
+                                        <i class="fa-solid fa-magnifying-glass-location"></i>
+                                        <span>Find Shortest Path</span>
+                                    </button>
+                                    <button type="button" id="resetRouteBtn" class="btn btn-secondary">
+                                        <i class="fa-solid fa-rotate-right"></i>
+                                        <span>Reset</span>
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Navigation Results Card -->
+                    <div id="routeResultsCard" class="card glass-card result-panel hidden">
+                        <div class="card-header">
+                            <h2><i class="fa-solid fa-flag-checkered"></i> Recommended Route</h2>
+                            <span id="routeDistanceBadge" class="pill-badge pill-blue">0 m</span>
+                        </div>
+                        <div class="card-body">
+                            <!-- Quick Metric Counters -->
+                            <div class="metrics-grid">
+                                <div class="metric-box">
+                                    <i class="fa-solid fa-person-walking color-blue"></i>
+                                    <span class="metric-val" id="walkingTimeVal">0 min</span>
+                                    <span class="metric-sub">Walking Time</span>
+                                </div>
+                                <div class="metric-box">
+                                    <i class="fa-solid fa-shoe-prints color-amber"></i>
+                                    <span class="metric-val" id="stepsVal">0</span>
+                                    <span class="metric-sub">Estimated Steps</span>
+                                </div>
+                                <div class="metric-box">
+                                    <i class="fa-solid fa-fire-flame-curved color-rose"></i>
+                                    <span class="metric-val" id="caloriesVal">0 kcal</span>
+                                    <span class="metric-sub">Calories Burned</span>
+                                </div>
+                                <div class="metric-box">
+                                    <i class="fa-solid fa-gauge-high color-green"></i>
+                                    <span class="metric-val" id="dijkstraLatencyVal">0 μs</span>
+                                    <span class="metric-sub">Calculation Time</span>
+                                </div>
+                            </div>
+
+                            <!-- Route Summary Banner -->
+                            <div class="daa-mini-banner">
+                                <i class="fa-solid fa-circle-check"></i>
+                                <span>Optimal path found: <strong id="hopsVal">0</strong> segments traversed across <strong id="nodesVisitedVal">0</strong> checked points.</span>
+                            </div>
+
+                            <!-- Path Step-by-Step Directions -->
+                            <div class="directions-section">
+                                <h3><i class="fa-solid fa-list-ol"></i> Turn-by-Turn Walking Directions</h3>
+                                <div id="directionsList" class="directions-list">
+                                    <!-- Populated dynamically via JS -->
+                                </div>
+                            </div>
+
+                            <!-- Route Distance Elevation Profile Chart -->
+                            <div id="routeChartContainer" class="chart-embed-box hidden">
+                                <h3><i class="fa-solid fa-chart-area"></i> Distance Progression Profile</h3>
+                                <img id="routeChartImg" src="" alt="Route Distance Profile" class="dynamic-chart-img">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Selected Landmark Details Card -->
+                    <div id="landmarkInfoCard" class="card glass-card landmark-detail-card">
+                        <div class="card-header">
+                            <h2><i class="fa-solid fa-circle-info"></i> Landmark Details</h2>
+                            <span class="hint-text">Click any map landmark</span>
+                        </div>
+                        <div class="card-body" id="landmarkDetailBody">
+                            <p class="placeholder-text"><i class="fa-solid fa-hand-pointer"></i> Click any landmark node on the campus map to view building info, hours, facilities, or set it as start/destination.</p>
+                        </div>
+                    </div>
+                </aside>
+
+                <!-- Interactive Map Canvas Workspace -->
+                <div class="map-workspace">
+                    <div class="map-container glass-card">
+                        <!-- Map Floating Toolbar -->
+                        <div class="map-toolbar">
+                            <div class="map-title-bar">
+                                <span class="map-title"><i class="fa-solid fa-building-columns"></i> Interactive Campus Map</span>
+                                <span class="map-subtitle">Click landmarks to pick Start & Destination</span>
+                            </div>
+                            <div class="map-controls">
+                                <button id="btnZoomIn" class="btn-tool" title="Zoom In"><i class="fa-solid fa-plus"></i></button>
+                                <button id="btnZoomOut" class="btn-tool" title="Zoom Out"><i class="fa-solid fa-minus"></i></button>
+                                <button id="btnResetView" class="btn-tool" title="Reset Map View"><i class="fa-solid fa-arrows-to-dot"></i></button>
+                                <button id="btnToggleLabels" class="btn-tool active" title="Toggle Landmark Labels"><i class="fa-solid fa-font"></i></button>
+                            </div>
+                        </div>
+
+                        <!-- HTML5 Canvas Map -->
+                        <div class="canvas-viewport" id="canvasViewport">
+                            <canvas id="campusCanvas" width="1000" height="680"></canvas>
+                        </div>
+
+                        <!-- Map Interactive Legend -->
+                        <div class="map-legend">
+                            <span class="legend-title"><i class="fa-solid fa-tags"></i> Campus Zones:</span>
+                            <div class="legend-items">
+                                <span class="legend-pill" style="--c: #10b981;"><i class="fa-solid fa-door-open"></i> Entrance</span>
+                                <span class="legend-pill" style="--c: #38bdf8;"><i class="fa-solid fa-graduation-cap"></i> Academic</span>
+                                <span class="legend-pill" style="--c: #818cf8;"><i class="fa-solid fa-building-columns"></i> Admin</span>
+                                <span class="legend-pill" style="--c: #f59e0b;"><i class="fa-solid fa-utensils"></i> Student Life</span>
+                                <span class="legend-pill" style="--c: #ec4899;"><i class="fa-solid fa-futbol"></i> Sports</span>
+                                <span class="legend-pill" style="--c: #a855f7;"><i class="fa-solid fa-hotel"></i> Residential</span>
+                                <span class="legend-pill" style="--c: #14b8a6;"><i class="fa-solid fa-briefcase-medical"></i> Services</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= TAB 2: ALGORITHM VISUALIZER ================= -->
+        <section id="tab-visualizer" class="tab-pane">
+            <div class="visualizer-container">
+                <!-- Visualizer Controls Top Bar -->
+                <div class="vis-header-card glass-card">
+                    <div class="vis-title-col">
+                        <h2><i class="fa-solid fa-network-wired"></i> Step-by-Step Route Calculation Visualizer</h2>
+                        <p class="vis-desc">Watch how Dijkstra's algorithm searches through pathways, explores neighbors, and builds the optimal shortest route.</p>
+                    </div>
+
+                    <div class="vis-actions-col">
+                        <div class="vis-btn-group">
+                            <button id="visPlayBtn" class="btn btn-primary"><i class="fa-solid fa-play"></i> Play</button>
+                            <button id="visPauseBtn" class="btn btn-secondary" disabled><i class="fa-solid fa-pause"></i> Pause</button>
+                            <button id="visPrevBtn" class="btn btn-secondary" title="Previous Step"><i class="fa-solid fa-backward-step"></i></button>
+                            <button id="visNextBtn" class="btn btn-secondary" title="Next Step"><i class="fa-solid fa-forward-step"></i></button>
+                            <button id="visResetBtn" class="btn btn-secondary" title="Reset Trace"><i class="fa-solid fa-rotate-left"></i></button>
+                        </div>
+
+                        <div class="speed-slider-group">
+                            <label for="visSpeed"><i class="fa-solid fa-gauge"></i> Speed:</label>
+                            <input type="range" id="visSpeed" min="200" max="1800" value="800" step="100">
+                            <span id="visSpeedLabel">Normal</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Trace Status Banner -->
+                <div class="trace-banner glass-card" id="traceBanner">
+                    <div class="step-indicator">
+                        <span class="step-badge" id="traceStepBadge">Step 0 / 0</span>
+                    </div>
+                    <div class="step-narrative" id="traceNarrative">
+                        Select a Start and Destination in the Campus Navigation tab, calculate a route, then play or step through the route discovery process here!
+                    </div>
+                </div>
+
+                <!-- Visualizer Split Grid -->
+                <div class="vis-grid">
+                    <!-- Left: Algorithm State (Priority Queue & Visited Nodes) -->
+                    <div class="vis-state-col">
+                        <!-- Priority Queue Box -->
+                        <div class="card glass-card">
+                            <div class="card-header">
+                                <h3><i class="fa-solid fa-layer-group"></i> Active Exploration Queue</h3>
+                                <span class="pill-badge pill-purple" id="pqCountBadge">0 Items</span>
+                            </div>
+                            <div class="card-body">
+                                <p class="helper-text">Next locations to evaluate (sorted by shortest distance):</p>
+                                <div id="pqList" class="pq-chips-list">
+                                    <span class="empty-state">Queue Empty</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Visited Nodes Box -->
+                        <div class="card glass-card">
+                            <div class="card-header">
+                                <h3><i class="fa-solid fa-circle-check"></i> Finalized Locations</h3>
+                                <span class="pill-badge pill-green" id="visitedCountBadge">0 Finalized</span>
+                            </div>
+                            <div class="card-body">
+                                <div id="visitedList" class="visited-chips-list">
+                                    <span class="empty-state">No locations finalized yet</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right: Live Tentative Distance Table -->
+                    <div class="vis-table-col">
+                        <div class="card glass-card">
+                            <div class="card-header">
+                                <h3><i class="fa-solid fa-table-list"></i> Current Distance Table</h3>
+                                <span class="pill-badge pill-blue">Live Status</span>
+                            </div>
+                            <div class="card-body table-responsive">
+                                <table class="vis-table" id="visDistTable">
+                                    <thead>
+                                        <tr>
+                                            <th>Campus Landmark</th>
+                                            <th>Category</th>
+                                            <th>Shortest Known Distance</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="visDistTableBody">
+                                        <!-- Populated via JS -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= TAB 3: PERFORMANCE & ANALYTICS ================= -->
+        <section id="tab-benchmark" class="tab-pane">
+            <div class="benchmark-container">
+                <!-- Benchmark Header & Controls -->
+                <div class="card glass-card bench-header-card">
+                    <div class="bench-title">
+                        <h2><i class="fa-solid fa-chart-line"></i> Route Performance & Statistics</h2>
+                        <p>Analyze route calculation speeds and campus walkway distribution using NumPy and Matplotlib.</p>
+                    </div>
+
+                    <div class="bench-controls">
+                        <div class="form-group inline">
+                            <label for="benchTrials"><i class="fa-solid fa-dice"></i> Sample Test Queries:</label>
+                            <select id="benchTrials">
+                                <option value="100">100 Random Route Pairs</option>
+                                <option value="250" selected>250 Random Route Pairs</option>
+                                <option value="500">500 Random Route Pairs</option>
+                            </select>
+                        </div>
+                        <button id="runBenchmarkBtn" class="btn btn-primary">
+                            <i class="fa-solid fa-bolt"></i>
+                            <span>Run Performance Test</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- NumPy Statistical Summary Cards -->
+                <div class="stats-overview-grid" id="statsOverviewGrid">
+                    <div class="stat-card glass-card">
+                        <div class="stat-icon bg-green"><i class="fa-solid fa-bolt-lightning"></i></div>
+                        <div class="stat-details">
+                            <span class="stat-label">Average Route Calculation</span>
+                            <span class="stat-number" id="statDijkstraMean">-- μs</span>
+                            <span class="stat-sub" id="statDijkstraStd">Std Dev: -- μs</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-card glass-card">
+                        <div class="stat-icon bg-blue"><i class="fa-solid fa-person-walking"></i></div>
+                        <div class="stat-details">
+                            <span class="stat-label">Average Campus Walk</span>
+                            <span class="stat-number">485 m</span>
+                            <span class="stat-sub">~6.2 minutes walk</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-card glass-card">
+                        <div class="stat-icon bg-amber"><i class="fa-solid fa-gauge-high"></i></div>
+                        <div class="stat-details">
+                            <span class="stat-label">Efficiency Multiplier</span>
+                            <span class="stat-number" id="statSpeedup">--x</span>
+                            <span class="stat-sub">Faster than naive search</span>
+                        </div>
+                    </div>
+
+                    <div class="stat-card glass-card">
+                        <div class="stat-icon bg-purple"><i class="fa-solid fa-circle-nodes"></i></div>
+                        <div class="stat-details">
+                            <span class="stat-label">Campus Connectivity</span>
+                            <span class="stat-number">{{ summary.graph_density_pct }}%</span>
+                            <span class="stat-sub">{{ summary.num_edges }} walkways across {{ summary.num_nodes }} buildings</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Matplotlib Dynamic Charts Grid -->
+                <div class="charts-grid">
+                    <div class="card glass-card chart-card">
+                        <div class="card-header">
+                            <h3><i class="fa-solid fa-chart-spline"></i> Route Calculation Speed vs Graph Size</h3>
+                            <span class="pill-badge pill-purple">Matplotlib Chart</span>
+                        </div>
+                        <div class="card-body chart-wrapper">
+                            <div id="chart1Placeholder" class="chart-loading">
+                                <i class="fa-solid fa-spinner fa-spin"></i>
+                                <span>Generating Performance Chart...</span>
+                            </div>
+                            <img id="chart1Img" src="" alt="Performance Scaling" class="matplotlib-img hidden">
+                        </div>
+                    </div>
+
+                    <div class="card glass-card chart-card">
+                        <div class="card-header">
+                            <h3><i class="fa-solid fa-chart-simple"></i> Walkway Distance & Building Connectivity</h3>
+                            <span class="pill-badge pill-blue">NumPy Analytics</span>
+                        </div>
+                        <div class="card-body chart-wrapper">
+                            <div id="chart2Placeholder" class="chart-loading">
+                                <i class="fa-solid fa-spinner fa-spin"></i>
+                                <span>Generating Campus Analytics Plot...</span>
+                            </div>
+                            <img id="chart2Img" src="" alt="Campus Graph Analytics" class="matplotlib-img hidden">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+        <div class="footer-container">
+            <p>SmartCampus: College Navigation & Shortest Path Finder • Built with Python Flask, NumPy & Matplotlib</p>
+            <div class="footer-tags">
+                <span><i class="fa-solid fa-code"></i> Python</span>
+                <span><i class="fa-solid fa-cubes"></i> Flask</span>
+                <span><i class="fa-solid fa-square-root-variable"></i> NumPy</span>
+                <span><i class="fa-solid fa-chart-pie"></i> Matplotlib</span>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Embedded Data for JavaScript (valid JSON without JS linter warnings) -->
+    <script type="application/json" id="campus-nodes-data">{{ nodes | tojson | safe }}</script>
+    <script type="application/json" id="campus-edges-data">{{ edges | tojson | safe }}</script>
+    <script type="application/json" id="campus-summary-data">{{ summary | tojson | safe }}</script>
+
+    <script>
+        // Pass server data to JavaScript
+        try {
+            window.CAMPUS_NODES = JSON.parse(document.getElementById('campus-nodes-data').textContent);
+            window.CAMPUS_EDGES = JSON.parse(document.getElementById('campus-edges-data').textContent);
+            window.CAMPUS_SUMMARY = JSON.parse(document.getElementById('campus-summary-data').textContent);
+        } catch (e) {
+            console.error('Data parsing error:', e);
+        }
+    </script>
+    <script src="{{ url_for('static', filename='js/map.js') }}?v=2"></script>
+    <script src="{{ url_for('static', filename='js/visualizer.js') }}?v=2"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}?v=2"></script>
+</body>
+</html>
